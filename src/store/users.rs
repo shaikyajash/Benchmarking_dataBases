@@ -1,14 +1,21 @@
 use std::{fmt, fs::File, io::Read, time::Instant};
 
+use mongodb::Database;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use surrealdb::{Surreal, engine::remote::ws};
 
-use crate::utils::db_operations::PgOperations;
+use crate::utils::{
+    mongo_db_operations::MongoOperations, psql_db_operations::PgOperations,
+    surreal_db_operations::SurrealOperations,
+};
 
 pub enum Error {
     IoError(std::io::Error),
     SerdeError(serde_json::Error),
     SqlxError(sqlx::Error),
+    MongoError(mongodb::error::Error),
+    SurrealError(surrealdb::Error),
 }
 
 impl fmt::Display for Error {
@@ -17,6 +24,8 @@ impl fmt::Display for Error {
             Error::IoError(e) => write!(f, "IO error: {}", e),
             Error::SerdeError(e) => write!(f, "Serialization error: {}", e),
             Error::SqlxError(e) => write!(f, "SQLx error: {}", e),
+            Error::MongoError(e) => write!(f, "MongoDB error: {}", e),
+            Error::SurrealError(e) => write!(f, "SurrealDB error: {}", e),
         }
     }
 }
@@ -24,6 +33,17 @@ impl fmt::Display for Error {
 impl From<sqlx::Error> for Error {
     fn from(err: sqlx::Error) -> Self {
         Error::SqlxError(err)
+    }
+}
+impl From<mongodb::error::Error> for Error {
+    fn from(err: mongodb::error::Error) -> Self {
+        Error::MongoError(err)
+    }
+}
+
+impl From<surrealdb::Error> for Error {
+    fn from(err: surrealdb::Error) -> Self {
+        Error::SurrealError(err)
     }
 }
 
@@ -80,6 +100,49 @@ impl Users {
         pool.read_users().await?;
         let read_time_ms = start_read.elapsed().as_millis();
 
+        Ok(BenchmarkResult {
+            insert_time_ms,
+            read_time_ms,
+            clear_time_ms,
+        })
+    }
+
+    /// Benchmark MongoDB database operations
+    pub async fn mongo_benchmark(&self, db: &Database) -> Result<BenchmarkResult, Error> {
+        let start_clear = Instant::now();
+        db.clear_users().await?;
+        let clear_time_ms = start_clear.elapsed().as_millis();
+        let start_write = Instant::now();
+        for user in &self.data {
+            db.insert_user(user).await?;
+        }
+        let insert_time_ms = start_write.elapsed().as_millis();
+        let start_read = Instant::now();
+        db.read_users().await?;
+        let read_time_ms = start_read.elapsed().as_millis();
+        Ok(BenchmarkResult {
+            insert_time_ms,
+            read_time_ms,
+            clear_time_ms,
+        })
+    }
+
+    /// Benchmark SurrealDB database operations
+    pub async fn surreal_benchmark(
+        &self,
+        db: &Surreal<ws::Client>,
+    ) -> Result<BenchmarkResult, Error> {
+        let start_clear = Instant::now();
+        db.clear_users().await?;
+        let clear_time_ms = start_clear.elapsed().as_millis();
+        let start_write = Instant::now();
+        for user in &self.data {
+            db.insert_user(user).await?;
+        }
+        let insert_time_ms = start_write.elapsed().as_millis();
+        let start_read = Instant::now();
+        db.read_users().await?;
+        let read_time_ms = start_read.elapsed().as_millis();
         Ok(BenchmarkResult {
             insert_time_ms,
             read_time_ms,

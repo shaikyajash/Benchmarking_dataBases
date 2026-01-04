@@ -8,14 +8,14 @@ use axum::{Router, routing::get};
 
 use crate::{
     handlers::health::health_check, routers::benchmark::benchmark_router,
-    store::shared_state::AppState, utils::db_functions,
+    store::shared_state::AppState, utils::db_functions::Databases,
 };
 
 #[tokio::main]
 
 async fn main() {
     //connect to Databases
-    let db = db_functions::Databases::new().await;
+    let db = Databases::new().await;
 
     //Tables Setup
     match db.postgres_tables_setup().await {
@@ -24,7 +24,7 @@ async fn main() {
     };
 
     //Shared State
-    let state = AppState::new(db.pg_pool);
+    let state = AppState::new(db.pg_pool, db.mongo_db_connection, db.surreal_db_connection);
 
     //Router setup
     let app = Router::new()
