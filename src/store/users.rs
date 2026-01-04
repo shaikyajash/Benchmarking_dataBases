@@ -1,12 +1,18 @@
-use std::{fmt, fs::File, io::Read, time::Instant};
+use std::{fmt, fs::File, io::Read, sync::Arc, time::Instant};
 
 use mongodb::Database;
+use rocksdb::DB as RocksDB;
+use rusty_leveldb::DB as LevelDB;
 use serde::{Deserialize, Serialize};
 use sqlx::PgPool;
+use std::sync::Mutex;
 use surrealdb::{Surreal, engine::remote::ws};
 
 use crate::utils::{
-    mongo_db_operations::MongoOperations, psql_db_operations::PgOperations,
+    level_db_operations::{LevelError, LevelOperations},
+    mongo_db_operations::MongoOperations,
+    psql_db_operations::PgOperations,
+    rocks_db_operations::{RocksError, RocksOperations},
     surreal_db_operations::SurrealOperations,
 };
 
@@ -16,6 +22,8 @@ pub enum Error {
     SqlxError(sqlx::Error),
     MongoError(mongodb::error::Error),
     SurrealError(surrealdb::Error),
+    RocksError(RocksError),
+    LevelError(LevelError),
 }
 
 impl fmt::Display for Error {
@@ -26,6 +34,8 @@ impl fmt::Display for Error {
             Error::SqlxError(e) => write!(f, "SQLx error: {}", e),
             Error::MongoError(e) => write!(f, "MongoDB error: {}", e),
             Error::SurrealError(e) => write!(f, "SurrealDB error: {}", e),
+            Error::RocksError(e) => write!(f, "RocksDB error: {}", e),
+            Error::LevelError(e) => write!(f, "LevelDB error: {}", e),
         }
     }
 }
@@ -46,6 +56,16 @@ impl From<surrealdb::Error> for Error {
         Error::SurrealError(err)
     }
 }
+impl From<RocksError> for Error {
+    fn from(err: RocksError) -> Self {
+        Error::RocksError(err)
+    }
+}
+impl From<LevelError> for Error {
+    fn from(err: LevelError) -> Self {
+        Error::LevelError(err)
+    }
+}
 
 #[derive(Debug, sqlx::FromRow, Serialize, Deserialize, Clone)]
 pub struct User {
@@ -58,9 +78,9 @@ pub struct User {
 
 #[derive(Debug, Serialize)]
 pub struct BenchmarkResult {
-    pub insert_time_ms: u128,
-    pub read_time_ms: u128,
-    pub clear_time_ms: u128,
+    pub insert_time_s: f64,
+    pub read_time_s: f64,
+    pub clear_time_s: f64,
 }
 
 // Wrapper struct for Vec<User> with benchmark methods
@@ -85,7 +105,7 @@ impl Users {
         // Clear existing data
         let start_clear = Instant::now();
         pool.clear_users().await?;
-        let clear_time_ms = start_clear.elapsed().as_millis();
+        let clear_time_s = start_clear.elapsed().as_secs_f64();
 
         // Insert all users
         let start_write = Instant::now();
@@ -93,17 +113,17 @@ impl Users {
             pool.insert_users(user).await?;
         }
 
-        let insert_time_ms = start_write.elapsed().as_millis();
+        let insert_time_s = start_write.elapsed().as_secs_f64();
 
         // Read all users
         let start_read = Instant::now();
         pool.read_users().await?;
-        let read_time_ms = start_read.elapsed().as_millis();
+        let read_time_s = start_read.elapsed().as_secs_f64();
 
         Ok(BenchmarkResult {
-            insert_time_ms,
-            read_time_ms,
-            clear_time_ms,
+            insert_time_s,
+            read_time_s,
+            clear_time_s,
         })
     }
 
@@ -111,19 +131,19 @@ impl Users {
     pub async fn mongo_benchmark(&self, db: &Database) -> Result<BenchmarkResult, Error> {
         let start_clear = Instant::now();
         db.clear_users().await?;
-        let clear_time_ms = start_clear.elapsed().as_millis();
+        let clear_time_s = start_clear.elapsed().as_secs_f64();
         let start_write = Instant::now();
         for user in &self.data {
             db.insert_user(user).await?;
         }
-        let insert_time_ms = start_write.elapsed().as_millis();
+        let insert_time_s = start_write.elapsed().as_secs_f64();
         let start_read = Instant::now();
         db.read_users().await?;
-        let read_time_ms = start_read.elapsed().as_millis();
+        let read_time_s = start_read.elapsed().as_secs_f64();
         Ok(BenchmarkResult {
-            insert_time_ms,
-            read_time_ms,
-            clear_time_ms,
+            insert_time_s,
+            read_time_s,
+            clear_time_s,
         })
     }
 
@@ -134,19 +154,57 @@ impl Users {
     ) -> Result<BenchmarkResult, Error> {
         let start_clear = Instant::now();
         db.clear_users().await?;
-        let clear_time_ms = start_clear.elapsed().as_millis();
+        let clear_time_s = start_clear.elapsed().as_secs_f64();
         let start_write = Instant::now();
         for user in &self.data {
             db.insert_user(user).await?;
         }
-        let insert_time_ms = start_write.elapsed().as_millis();
+        let insert_time_s = start_write.elapsed().as_secs_f64();
         let start_read = Instant::now();
         db.read_users().await?;
-        let read_time_ms = start_read.elapsed().as_millis();
+        let read_time_s = start_read.elapsed().as_secs_f64();
         Ok(BenchmarkResult {
-            insert_time_ms,
-            read_time_ms,
-            clear_time_ms,
+            insert_time_s,
+            read_time_s,
+            clear_time_s,
+        })
+    }
+
+    pub fn rocks_benchmark(&self, db: &Arc<RocksDB>) -> Result<BenchmarkResult, Error> {
+        let start_clear = Instant::now();
+        db.clear_users()?;
+        let clear_time_s = start_clear.elapsed().as_secs_f64();
+        let start_write = Instant::now();
+        for user in &self.data {
+            db.insert_user(user)?;
+        }
+        let insert_time_s = start_write.elapsed().as_secs_f64();
+        let start_read = Instant::now();
+        db.read_users()?;
+        let read_time_s = start_read.elapsed().as_secs_f64();
+        Ok(BenchmarkResult {
+            insert_time_s,
+            read_time_s,
+            clear_time_s,
+        })
+    }
+
+    pub fn level_benchmark(&self, db: &Arc<Mutex<LevelDB>>) -> Result<BenchmarkResult, Error> {
+        let start_clear = Instant::now();
+        db.clear_users()?;
+        let clear_time_s = start_clear.elapsed().as_secs_f64();
+        let start_write = Instant::now();
+        for user in &self.data {
+            db.insert_user(user)?;
+        }
+        let insert_time_s = start_write.elapsed().as_secs_f64();
+        let start_read = Instant::now();
+        db.read_users()?;
+        let read_time_s = start_read.elapsed().as_secs_f64();
+        Ok(BenchmarkResult {
+            insert_time_s,
+            read_time_s,
+            clear_time_s,
         })
     }
 }

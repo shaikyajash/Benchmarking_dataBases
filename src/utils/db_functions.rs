@@ -1,13 +1,23 @@
+use std::sync::{Arc, Mutex};
+
 use mongodb::Database;
 use sqlx::PgPool;
 use surrealdb::Surreal;
 
-use crate::utils::connect_to_db::{connect_to_mongodb, connect_to_pgsql, connect_to_surrealdb};
+use crate::utils::connect_to_db::{
+    connect_to_leveldb, connect_to_mongodb, connect_to_pgsql, connect_to_rocksdb,
+    connect_to_surrealdb,
+};
+
+use rocksdb::DB as RocksDB;
+use rusty_leveldb::DB as LevelDB;
 
 pub struct Databases {
     pub pg_pool: PgPool,
     pub mongo_db_connection: Database,
     pub surreal_db_connection: Surreal<surrealdb::engine::remote::ws::Client>,
+    pub rocks_db_connection: RocksDB,
+    pub level_db_connection: Arc<Mutex<LevelDB>>,
 }
 
 impl Databases {
@@ -44,11 +54,34 @@ impl Databases {
                 std::process::exit(1);
             }
         };
+        let rocks_db_connection = match connect_to_rocksdb() {
+            Ok(db) => {
+                eprint!("Connected to RocksDB\n");
+                db
+            }
+            Err(e) => {
+                eprintln!("Failed to connect to RocksDB: {}", e);
+                std::process::exit(1);
+            }
+        };
+
+        let level_db_connection = match connect_to_leveldb() {
+            Ok(db) => {
+                eprint!("Connected to LevelDB\n");
+                db
+            }
+            Err(e) => {
+                eprintln!("Failed to connect to LevelDB: {}", e);
+                std::process::exit(1);
+            }
+        };
 
         Self {
             pg_pool,
             mongo_db_connection,
             surreal_db_connection,
+            rocks_db_connection,
+            level_db_connection,
         }
     }
 

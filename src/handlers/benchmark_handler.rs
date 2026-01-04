@@ -9,9 +9,9 @@ use crate::{
 #[derive(Serialize)]
 pub struct BenchmarkResponse {
     database: String,
-    insert_time_ms: u128,
-    read_time_ms: u128,
-    clear_time_ms: u128,
+    insert_time_s: f64,
+    read_time_s: f64,
+    clear_time_s: f64,
     entries: usize,
 }
 
@@ -40,9 +40,9 @@ pub async fn benchmark_handler(
 
     results.push(BenchmarkResponse {
         database: "PostgreSQL".to_string(),
-        insert_time_ms: result.insert_time_ms,
-        read_time_ms: result.read_time_ms,
-        clear_time_ms: result.clear_time_ms,
+        insert_time_s: result.insert_time_s,
+        read_time_s: result.read_time_s,
+        clear_time_s: result.clear_time_s,
         entries: NUM_RECORDS,
     });
 
@@ -57,9 +57,9 @@ pub async fn benchmark_handler(
 
     results.push(BenchmarkResponse {
         database: "MongoDB".to_string(),
-        insert_time_ms: mongo_result.insert_time_ms,
-        read_time_ms: mongo_result.read_time_ms,
-        clear_time_ms: mongo_result.clear_time_ms,
+        insert_time_s: mongo_result.insert_time_s,
+        read_time_s: mongo_result.read_time_s,
+        clear_time_s: mongo_result.clear_time_s,
         entries: NUM_RECORDS,
     });
 
@@ -74,9 +74,41 @@ pub async fn benchmark_handler(
 
     results.push(BenchmarkResponse {
         database: "SurrealDB".to_string(),
-        insert_time_ms: surreal_result.insert_time_ms,
-        read_time_ms: surreal_result.read_time_ms,
-        clear_time_ms: surreal_result.clear_time_ms,
+        insert_time_s: surreal_result.insert_time_s,
+        read_time_s: surreal_result.read_time_s,
+        clear_time_s: surreal_result.clear_time_s,
+        entries: NUM_RECORDS,
+    });
+
+    // RockDB Benchmark
+    let rocks_result = match users.rocks_benchmark(&state.rocks_db) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("RocksDB Benchmark failed: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    results.push(BenchmarkResponse {
+        database: "RocksDB".to_string(),
+        insert_time_s: rocks_result.insert_time_s,
+        read_time_s: rocks_result.read_time_s,
+        clear_time_s: rocks_result.clear_time_s,
+        entries: NUM_RECORDS,
+    });
+
+    // LevelDB Benchmark
+    let level_result = match users.level_benchmark(&state.level_db) {
+        Ok(result) => result,
+        Err(e) => {
+            eprintln!("LevelDB Benchmark failed: {}", e);
+            return Err(StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    };
+    results.push(BenchmarkResponse {
+        database: "LevelDB".to_string(),
+        insert_time_s: level_result.insert_time_s,
+        read_time_s: level_result.read_time_s,
+        clear_time_s: level_result.clear_time_s,
         entries: NUM_RECORDS,
     });
 

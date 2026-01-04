@@ -24,7 +24,13 @@ async fn main() {
     };
 
     //Shared State
-    let state = AppState::new(db.pg_pool, db.mongo_db_connection, db.surreal_db_connection);
+    let state = AppState::new(
+        db.pg_pool,
+        db.mongo_db_connection,
+        db.surreal_db_connection,
+        db.rocks_db_connection,
+        db.level_db_connection,
+    );
 
     //Router setup
     let app = Router::new()

@@ -3,6 +3,11 @@ use mongodb::{
     bson::doc,
     options::{ClientOptions, ServerApi, ServerApiVersion},
 };
+use std::sync::{Arc, Mutex};
+
+use rocksdb::{DB as RocksDB, Options as RocksOptions};
+
+use rusty_leveldb::{DB as LevelDB, Options as LevelOptions};
 use sqlx::{PgPool, postgres::PgPoolOptions};
 use surrealdb::{Surreal, engine::remote::ws::Ws, opt::auth::Root};
 
@@ -48,4 +53,24 @@ pub async fn connect_to_surrealdb()
     db.use_ns("testns").use_db("testdb").await?;
     println!("Successfully connected to SurrealDB!");
     Ok(db)
+}
+
+pub fn connect_to_rocksdb() -> Result<RocksDB, rocksdb::Error> {
+    let mut opts = RocksOptions::default();
+
+    opts.create_if_missing(true);
+
+    let db = RocksDB::open(&opts, "./data/rocksdb")?;
+    println!("Successfully connected to RocksDB!");
+
+    Ok(db)
+}
+
+pub fn connect_to_leveldb() -> Result<Arc<Mutex<LevelDB>>, rusty_leveldb::Status> {
+    let mut opts = LevelOptions::default();
+    opts.create_if_missing = true;
+
+    let db = LevelDB::open("./data/leveldb", opts)?;
+    println!("Successfully connected to LevelDB!");
+    Ok(Arc::new(Mutex::new(db)))
 }
