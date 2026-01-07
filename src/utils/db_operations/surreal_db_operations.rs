@@ -1,7 +1,7 @@
 use serde::{Deserialize, Serialize};
 use surrealdb::{Surreal, engine::remote::ws::Client, sql::Thing};
 
-use crate::store::users::User;
+use crate::store::user_struct::User;
 
 // SurrealDB specific user struct (handles Thing ID type)
 #[derive(Debug, Serialize, Deserialize, Clone)]

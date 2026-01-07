@@ -1,6 +1,6 @@
 use sqlx::PgPool;
 
-use crate::store::users::User;
+use crate::store::user_struct::User;
 
 pub trait PgOperations {
     async fn read_users(&self) -> Result<Vec<User>, sqlx::Error>;

@@ -1,7 +1,7 @@
 use futures::TryStreamExt;
 use mongodb::{Collection, Database, bson::doc};
 
-use crate::store::users::User;
+use crate::store::user_struct::User;
 
 //MongoDb Operations
 pub trait MongoOperations {

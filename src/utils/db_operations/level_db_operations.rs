@@ -1,7 +1,7 @@
 use rusty_leveldb::{DB as LevelDB, LdbIterator};
 use std::sync::{Arc, Mutex};
 
-use crate::store::users::User;
+use crate::store::user_struct::User;
 
 // Custom error type for LevelDB operations
 #[derive(Debug)]
