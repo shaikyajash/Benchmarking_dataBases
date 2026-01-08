@@ -1,30 +1,51 @@
 use mongodb::{
-    Client, Database,
     bson::doc,
     options::{ClientOptions, ServerApi, ServerApiVersion},
+    Client, Database,
 };
 use std::sync::{Arc, Mutex};
 
-use rocksdb::{DB as RocksDB, Options as RocksOptions};
+use rocksdb::{Options as RocksOptions, DB as RocksDB};
 
 use leveldb::database::Database as LevelDB;
 use leveldb::options::Options as LevelOptions;
-use sqlx::{PgPool, postgres::PgPoolOptions};
+use sqlx::{postgres::PgPoolOptions, PgPool};
 use std::path::Path;
-use surrealdb::{Surreal, engine::remote::ws::Ws, opt::auth::Root};
+use surrealdb::{engine::remote::ws::Ws, opt::auth::Root, Surreal};
 
 pub async fn connect_to_pgsql() -> Result<PgPool, sqlx::Error> {
+    let database_url = match std::env::var("DATABASE_URL") {
+        Ok(url) => url,
+        Err(e) => {
+            eprint!(
+                "Coundn't load pgsql url going with default value error:{}",
+                e
+            );
+            "postgres://admin:admin@localhost:5432/testdb".to_string()
+        }
+    };
+
     let pg_pool = PgPoolOptions::new()
         .max_connections(10)
-        .connect("postgres://admin:admin@localhost:5432/testdb")
+        .connect(&database_url)
         .await?;
 
     Ok(pg_pool)
 }
 
 pub async fn connect_to_mongodb() -> Result<Database, mongodb::error::Error> {
-    let uri = "mongodb://admin:admin@localhost:27017";
-    let mut client_options = ClientOptions::parse(uri).await?;
+    let uri = match std::env::var("MONGODB_URL") {
+        Ok(url) => url,
+        Err(e) => {
+            eprint!(
+                "Coundn't load mongodb url going with default value error:{}",
+                e
+            );
+            "mongodb://admin:admin@localhost:27017".to_string()
+        }
+    };
+
+    let mut client_options = ClientOptions::parse(&uri).await?;
     // Set the server_api field of the client_options object to Stable API version 1
     let server_api = ServerApi::builder().version(ServerApiVersion::V1).build();
     client_options.server_api = Some(server_api);
@@ -44,9 +65,21 @@ pub async fn connect_to_mongodb() -> Result<Database, mongodb::error::Error> {
     Ok(client.database("testdb"))
 }
 
-pub async fn connect_to_surrealdb()
--> Result<Surreal<surrealdb::engine::remote::ws::Client>, surrealdb::Error> {
-    let db = Surreal::new::<Ws>("localhost:8000").await?;
+pub async fn connect_to_surrealdb(
+) -> Result<Surreal<surrealdb::engine::remote::ws::Client>, surrealdb::Error> {
+    let surreal_url = match std::env::var("SURREALDB_URL") {
+        Ok(url) => url,
+        Err(e) => {
+            eprint!(
+                "Coundn't load surrealdb url going with default value error:{}",
+                e
+            );
+
+            "localhost:8000".to_string()
+        }
+    };
+
+    let db = Surreal::new::<Ws>(&surreal_url).await?;
     db.signin(Root {
         username: "root",
         password: "root",

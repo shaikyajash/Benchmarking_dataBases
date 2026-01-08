@@ -1,0 +1,91 @@
+
+networks:
+  benchmark-network:
+    driver: bridge
+
+volumes:
+  bench_pgdata:
+  bench_mongodata:
+  bench_mongoconfig:
+  bench_surreal_data:
+  bench_app_data:
+
+services:
+  postgres:
+    image: postgres:latest
+    container_name: postgres
+    environment:
+      POSTGRES_USER: admin
+      POSTGRES_PASSWORD: admin
+      POSTGRES_DB: testdb
+    ports:
+      - "5432:5432"
+    volumes:
+      - bench_pgdata:/var/lib/postgresql
+    networks:
+      - benchmark-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U admin -d testdb"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  mongo:
+    image: mongo:latest
+    container_name: mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: admin
+      MONGO_INITDB_ROOT_PASSWORD: admin
+    ports:
+      - "27017:27017"
+    volumes:
+      - bench_mongodata:/data/db
+      - bench_mongoconfig:/data/configdb
+    networks:
+      - benchmark-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  surrealdb:
+    image: surrealdb/surrealdb:latest
+    container_name: surrealdb
+    command: start --user root --pass root rocksdb:/data/mydatabase.db
+    user: root
+    ports:
+      - "8000:8000"
+    volumes:
+      - bench_surreal_data:/data
+    networks:
+      - benchmark-network
+    healthcheck:
+      test: ["CMD", "/surreal", "isready"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: benchmark-app
+    ports:
+      - "3000:3000"
+    volumes:
+      - bench_app_data:/app/data
+    environment:
+      DATABASE_URL: postgres://admin:admin@postgres:5432/testdb
+      MONGODB_URL: mongodb://admin:admin@mongo:27017
+      SURREALDB_URL: surrealdb:8000
+    networks:
+      - benchmark-network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongo:
+        condition: service_healthy
+      surrealdb:
+        condition: service_started
