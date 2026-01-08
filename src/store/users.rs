@@ -1,8 +1,8 @@
 use std::{fs::File, io::Read, sync::Arc, time::Instant};
 
+use leveldb::database::Database as LevelDB;
 use mongodb::Database;
 use rocksdb::DB as RocksDB;
-use rusty_leveldb::DB as LevelDB;
 use serde::Serialize;
 use sqlx::PgPool;
 use std::sync::Mutex;
@@ -134,7 +134,7 @@ impl Users {
 
     pub fn level_benchmark(
         &self,
-        db: &Arc<Mutex<LevelDB>>,
+        db: &Arc<Mutex<LevelDB<i32>>>,
     ) -> Result<BenchmarkResult, error::Error> {
         let start_clear = Instant::now();
         db.clear_users()?;

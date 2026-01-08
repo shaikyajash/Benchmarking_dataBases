@@ -7,8 +7,10 @@ use std::sync::{Arc, Mutex};
 
 use rocksdb::{DB as RocksDB, Options as RocksOptions};
 
-use rusty_leveldb::{DB as LevelDB, Options as LevelOptions};
+use leveldb::database::Database as LevelDB;
+use leveldb::options::Options as LevelOptions;
 use sqlx::{PgPool, postgres::PgPoolOptions};
+use std::path::Path;
 use surrealdb::{Surreal, engine::remote::ws::Ws, opt::auth::Root};
 
 pub async fn connect_to_pgsql() -> Result<PgPool, sqlx::Error> {
@@ -66,11 +68,15 @@ pub fn connect_to_rocksdb() -> Result<RocksDB, rocksdb::Error> {
     Ok(db)
 }
 
-pub fn connect_to_leveldb() -> Result<Arc<Mutex<LevelDB>>, rusty_leveldb::Status> {
-    let mut opts = LevelOptions::default();
+pub fn connect_to_leveldb() -> Result<Arc<Mutex<LevelDB<i32>>>, Box<dyn std::error::Error>> {
+    let mut opts = LevelOptions::new();
     opts.create_if_missing = true;
 
-    let db = LevelDB::open("./data/leveldb", opts)?;
+    let path = Path::new("./data/leveldb");
+    std::fs::create_dir_all(path)?;
+
+    let db = LevelDB::open(path, opts)?;
     println!("Successfully connected to LevelDB!");
+
     Ok(Arc::new(Mutex::new(db)))
 }

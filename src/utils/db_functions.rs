@@ -9,15 +9,15 @@ use crate::utils::connect_to_db::{
     connect_to_surrealdb,
 };
 
+use leveldb::database::Database as LevelDB;
 use rocksdb::DB as RocksDB;
-use rusty_leveldb::DB as LevelDB;
 
 pub struct Databases {
     pub pg_pool: PgPool,
     pub mongo_db_connection: Database,
     pub surreal_db_connection: Surreal<surrealdb::engine::remote::ws::Client>,
     pub rocks_db_connection: RocksDB,
-    pub level_db_connection: Arc<Mutex<LevelDB>>,
+    pub level_db_connection: Arc<Mutex<LevelDB<i32>>>,
 }
 
 impl Databases {
