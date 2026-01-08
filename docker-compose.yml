@@ -29,6 +29,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   mongo:
     image: mongo:latest
@@ -48,6 +49,7 @@ services:
       interval: 5s
       timeout: 5s
       retries: 5
+      start_period: 10s
 
   surrealdb:
     image: surrealdb/surrealdb:latest
@@ -64,7 +66,7 @@ services:
       test: ["CMD", "/surreal", "isready"]
       interval: 5s
       timeout: 5s
-      retries: 10
+      retries: 5
       start_period: 10s
 
   app:
@@ -88,4 +90,4 @@ services:
       mongo:
         condition: service_healthy
       surrealdb:
-        condition: service_started
+        condition: service_healthy
