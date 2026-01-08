@@ -8,6 +8,7 @@ volumes:
   bench_mongodata:
   bench_mongoconfig:
   bench_surreal_data:
+  bench_surreal_logs:
   bench_app_data:
 
 services:
@@ -60,6 +61,7 @@ services:
       - "8000:8000"
     volumes:
       - bench_surreal_data:/data
+      - bench_surreal_logs:/logs
     networks:
       - benchmark-network
     healthcheck:
