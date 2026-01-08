@@ -10,23 +10,19 @@ pub trait PgOperations {
 
 impl PgOperations for PgPool {
     async fn insert_users(&self, user: &User) -> Result<(), sqlx::Error> {
-        let mut tx = self.begin().await?;
-
         sqlx::query(
             r#"
-        INSERT INTO users (id, name, email, age, active)
-        VALUES ($1, $2, $3, $4, $5)
-    "#,
+            INSERT INTO users (id, name, email, age, active)
+            VALUES ($1, $2, $3, $4, $5)
+            "#,
         )
         .bind(&user.id)
         .bind(&user.name)
         .bind(&user.email)
         .bind(&user.age)
         .bind(&user.active)
-        .execute(&mut *tx)
+        .execute(self)
         .await?;
-
-        tx.commit().await?;
 
         Ok(())
     }
